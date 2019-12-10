@@ -83,7 +83,7 @@ export function makeShader(
     uniformDeclaration += `${getCoordsDataType(inputInfo[i].shape.length)} ${
         x.charAt(0).toLowerCase() + x.slice(1)}Shape; `;
     prefixSnippets.push(`
-      layout(std430, set = 0, binding = ${1 + i}) readonly buffer ssb${x} {
+      layout(std430, set = 0, binding = ${1 + i}) buffer ssb${x} {
         ${mapToGlslTypes(inputInfo[i].dtype)} ${x}[];
       };
     `);
