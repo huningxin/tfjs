@@ -19,6 +19,10 @@
 #include <cstddef>
 #include <cstdint>
 
+#if defined(USE_WEBNN_OP)
+#include <webnn/webnn.h>
+#endif
+
 // This enum should align with the DType defined in kernels/types.ts.
 enum DType {
   float32 = 0,
@@ -94,6 +98,11 @@ extern pthreadpool *threadpool;
 
 namespace wasm {
 extern "C" {
+
+#if defined(USE_WEBNN_OP)
+WebnnNeuralNetworkContext get_webnn_context();
+#endif
+
 // Initializes the WASM backend.
 void init();
 

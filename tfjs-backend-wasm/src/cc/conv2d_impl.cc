@@ -35,6 +35,10 @@
 #include "tfjs-backend-wasm/src/cc/transpose_impl.h"
 #include "tfjs-backend-wasm/src/cc/util.h"
 
+#if defined(USE_WEBNN_OP)
+#include <webnn/webnn.h>
+#endif
+
 namespace {
 // We use std::tuple as the cache key as it implements the compare operator
 // needed for std::map.
@@ -44,7 +48,11 @@ typedef std::tuple<size_t, size_t, size_t, size_t, size_t, size_t, size_t,
     OperatorCacheKey;
 
 struct CachedInfo {
+#if defined(USE_WEBNN_OP)
+  WebnnCompilation op;
+#else
   xnn_operator_t op;
+#endif
   std::vector<float> transposed_filter;
 };
 
@@ -73,7 +81,13 @@ void erase_from_cache(const size_t tensor_id,
       auto operator_cache_key_idx = operator_cache.find(operator_cache_key);
       if (operator_cache_key_idx != operator_cache.end()) {
         auto& cached_info = operator_cache_key_idx->second;
+#if defined(USE_WEBNN_OP)
+        if (cached_info.op != nullptr) {
+          webnnCompilationRelease(cached_info.op);
+        }
+#else
         xnn_delete_operator(cached_info.op);
+#endif
         tfjs::backend::xnn_operator_count--;
 
         operator_cache.erase(operator_cache_key);
@@ -103,6 +117,27 @@ void associate_tensor_with_key(
     cache_keys.emplace_back(cache_key);
   }
 }
+
+#if defined(USE_WEBNN_OP)
+void webnn_compile_callback(WebnnCompileStatus status, WebnnCompilation compilation, char const * message, void * userdata) {
+  if (status == WebnnCompileStatus_Success) {
+    WebnnCompilation* conv2d_op = reinterpret_cast<WebnnCompilation*>(userdata);
+    *conv2d_op = compilation;
+  } else {
+    printf("[WEBNN] compile error status: %d, message: %s\n", status, message);
+  }
+}
+
+void webnn_compute_callback(WebnnComputeStatus status, WebnnNamedResults outputs, char const * message, void * userdata) {
+  if (status == WebnnComputeStatus_Success) {
+    bool* success = reinterpret_cast<bool*>(userdata);
+    *success = true;
+  } else {
+    printf("[WEBNN] compute error status: %d, message: %s\n", status, message);
+  }
+}
+
+#endif
 
 }  // namespace
 
@@ -139,7 +174,11 @@ void conv2d(const size_t x_id, const size_t batch_size,
     out_buf = intermediate_output.data();
   }
 
+#if defined(USE_WEBNN_OP)
+  WebnnCompilation conv2d_op = nullptr;
+#else
   xnn_operator_t conv2d_op = nullptr;
+#endif
 
   size_t flags = 0;
   if (is_same_pad) {
@@ -207,7 +246,11 @@ void conv2d(const size_t x_id, const size_t batch_size,
     std::vector<float> transposed_filter;
 
     const float* filter_xnn;
+#if defined(USE_WEBNN_OP)
+    if (is_depthwise && groups != 1) {
+#else
     if (is_depthwise) {
+#endif
       // For depthwiseConv2d, xnn pack and TensorFlow expect the same weights
       // layout:
       //   [filter_height, filter_width, input_channels, channel_multiplier]
@@ -229,6 +272,95 @@ void conv2d(const size_t x_id, const size_t batch_size,
       filter_xnn = transposed_filter.data();
     }
 
+#if defined(USE_WEBNN_OP)
+    WebnnNeuralNetworkContext context = get_webnn_context();
+    WebnnModelBuilder builder = webnnNeuralNetworkContextCreateModelBuilder(context);
+
+    WebnnConv2dOptions options;
+    options.inputLayout = WebnnInputOperandLayout::WebnnInputOperandLayout_Nhwc;
+    int32_t input_dims[4] = {
+        static_cast<int32_t>(batch_size),
+        static_cast<int32_t>(input_height),
+        static_cast<int32_t>(input_width),
+        static_cast<int32_t>(input_channels)
+    };
+    WebnnOperandDescriptor input_desc;
+    input_desc.type = WebnnOperandType::WebnnOperandType_Float32;
+    input_desc.dimensions = input_dims;
+    input_desc.dimensionsCount = 4;
+    WebnnOperand input = webnnModelBuilderInput(builder, "x", &input_desc);
+
+    int32_t filter_dims[4];
+    if (is_depthwise && groups != 1) {
+      options.groups = groups;
+      options.filterLayout = WebnnFilterOperandLayout::WebnnFilterOperandLayout_Hwio;
+      filter_dims[0] = static_cast<int32_t>(filter_height);
+      filter_dims[1] = static_cast<int32_t>(filter_width);
+      filter_dims[2] = static_cast<int32_t>(1);
+      filter_dims[3] = static_cast<int32_t>(groups);
+    } else {
+      options.groups = 1;
+      options.filterLayout = WebnnFilterOperandLayout::WebnnFilterOperandLayout_Ohwi;
+      filter_dims[0] = static_cast<int32_t>(output_channels);
+      filter_dims[1] = static_cast<int32_t>(filter_height);
+      filter_dims[2] = static_cast<int32_t>(filter_width);
+      filter_dims[3] = static_cast<int32_t>(input_channels);
+    };
+    WebnnOperandDescriptor filter_desc;
+    filter_desc.type = WebnnOperandType::WebnnOperandType_Float32;
+    filter_desc.dimensions = filter_dims;
+    filter_desc.dimensionsCount = 4;
+    const void* filter_value = reinterpret_cast<const void*>(filter_xnn);
+    size_t filter_size = filter_dims[0] * filter_dims[1] * filter_dims[2] * filter_dims[3] * sizeof(float);
+    WebnnOperand filter = webnnModelBuilderConstant(builder, &filter_desc, filter_value, filter_size);
+
+    int32_t padding[4] = {pad_top, pad_bottom, pad_left, pad_right};
+    options.padding = padding;
+    options.paddingCount = 4;
+
+    int32_t strides[2] = {stride_height, stride_width};
+    options.strides = strides;
+    options.stridesCount = 2;
+
+    int32_t dilations[2] = {dilation_height, dilation_width};
+    options.dilations = dilations;
+    options.dilationsCount = 2;
+
+    WebnnOperand output = webnnModelBuilderConv2d(builder, input, filter, &options);
+
+    if (bias_buf != nullptr) {
+      WebnnOperandDescriptor bias_desc;
+      int32_t bias_dims[1] = {output_channels};
+      bias_desc.type = WebnnOperandType::WebnnOperandType_Float32;
+      bias_desc.dimensions = bias_dims;
+      bias_desc.dimensionsCount = 1;
+      const void* bias_value = reinterpret_cast<const void*>(bias_buf);
+      size_t bias_size = bias_dims[0] * sizeof(float);
+      WebnnOperand bias = webnnModelBuilderConstant(builder, &bias_desc, bias_value, bias_size);
+      output = webnnModelBuilderAdd(builder, output, bias);
+    }
+
+    if (activation == FusableActivation::RELU || activation == FusableActivation::RELU6) {
+      WebnnOperandDescriptor min_max_desc;
+      int32_t min_max_dims[1] = {1};
+      min_max_desc.type = WebnnOperandType::WebnnOperandType_Float32;
+      min_max_desc.dimensions = min_max_dims;
+      min_max_desc.dimensionsCount = 1;
+      WebnnClampOptions options;
+      options.minValue = webnnModelBuilderConstant(builder, &min_max_desc, reinterpret_cast<const void*>(&output_min), sizeof(float));
+      options.maxValue = webnnModelBuilderConstant(builder, &min_max_desc, reinterpret_cast<const void*>(&output_max), sizeof(float));
+      output = webnnModelBuilderClamp(builder, output, &options);
+    }
+
+    WebnnNamedOperands outputs = webnnCreateNamedOperands();
+    webnnNamedOperandsSet(outputs, "out", output);
+    WebnnModel model = webnnModelBuilderCreateModel(builder, outputs);
+    webnnModelCompile(model, webnn_compile_callback, &conv2d_op, nullptr);
+    if (conv2d_op == nullptr) {
+      util::warn("[WebNN] compile conv2d_op failed.\n");
+      return;
+    }
+#else
     xnn_status status = xnn_create_convolution2d_nhwc_f32(
         pad_top, pad_right, pad_bottom, pad_left, filter_height, filter_width,
         stride_height, stride_width, dilation_height, dilation_width, groups,
@@ -241,6 +373,7 @@ void conv2d(const size_t x_id, const size_t batch_size,
           "Got status %d. Use -c dbg to see XNN logs.",
           status);
     }
+#endif
 
     operator_cache.emplace(
         cache_key,
@@ -259,6 +392,24 @@ void conv2d(const size_t x_id, const size_t batch_size,
     conv2d_op = operator_cache_idx->second.op;
   }
 
+#if defined(USE_WEBNN_OP)
+  WebnnNamedInputs inputs = webnnCreateNamedInputs();
+  WebnnInput x;
+  x.buffer = x_buf;
+  x.size = x_info.size * sizeof(float);
+  webnnNamedInputsSet(inputs, "x", &x);
+  WebnnNamedOutputs outputs = webnnCreateNamedOutputs();
+  WebnnOutput out;
+  out.buffer = out_buf;
+  out.size = out_info.size * sizeof(float);
+  webnnNamedOutputsSet(outputs, "out", &out);
+  bool success = false;
+  webnnCompilationCompute(conv2d_op, inputs, webnn_compute_callback, &success, outputs);
+  if (!success) {
+    util::warn("[WebNN] compute conv2d_op failed.\n");
+    return;
+  }
+#else
   xnn_status status = xnn_setup_convolution2d_nhwc_f32(
       conv2d_op, batch_size, input_height, input_width, x_buf, out_buf,
       tfjs::backend::threadpool);
@@ -269,7 +420,9 @@ void conv2d(const size_t x_id, const size_t batch_size,
         status);
   }
 
+
   xnn_run_operator(conv2d_op, tfjs::backend::threadpool);
+#endif
 
   if (activation == FusableActivation::PRELU) {
     prelu(out_buf, out_info.size, prelu_weights_id, out_id);

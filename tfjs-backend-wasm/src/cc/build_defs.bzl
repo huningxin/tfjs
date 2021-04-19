@@ -1,4 +1,4 @@
-def tfjs_unit_test(name, srcs, deps = []):
+def tfjs_unit_test(name, srcs, deps = [], copts = ["-Itfjs-backend-wasm/src/cc/webnn/include/"]):
     """Unit test binary based on Google Test.
     Args:
       name: The name of the test target to define.
@@ -15,9 +15,10 @@ def tfjs_unit_test(name, srcs, deps = []):
         deps = [
             "@com_google_googletest//:gtest_main",
         ] + deps,
+        copts = copts,
     )
 
-def tfjs_cc_library(name, srcs = [], hdrs = [], deps = []):
+def tfjs_cc_library(name, srcs = [], hdrs = [], deps = [], copts = ["-Itfjs-backend-wasm/src/cc/webnn/include/"]):
     """CC library for TensorFlow.js
     Args:
       name: The name of the TensorFlow.js cc library to define.
@@ -32,4 +33,5 @@ def tfjs_cc_library(name, srcs = [], hdrs = [], deps = []):
         srcs = srcs,
         hdrs = hdrs,
         deps = deps,
+        copts = copts,
     )

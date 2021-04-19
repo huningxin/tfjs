@@ -92,6 +92,21 @@ test_suite(
 
 ## Library
 
+cc_library(
+    name = "webnn",
+    srcs = [
+      "webnn/lib/libwebnn_native.so",
+      "webnn/lib/libwebnn_proc.so",
+      "webnn/lib/libc++.so",
+      "webnn/lib/libXNNPACK.so",
+    ],
+    hdrs = glob([
+        "webnn/include/**/*.h",
+    ]),
+    copts = ["-Iwebnn/include/"],
+    visibility = ["//visibility:public"],
+)
+
 tfjs_cc_library(
     name = "backend",
     srcs = ["backend.cc"],
@@ -99,7 +114,8 @@ tfjs_cc_library(
     deps = [
         ":check_macros",
         ":util",
-        "@xnnpack//:xnnpack_operators_nhwc_f32",
+        # "@xnnpack//:xnnpack_operators_nhwc_f32",
+        ":webnn",
     ],
 )
 
@@ -110,6 +126,7 @@ tfjs_unit_test(
         ":Prelu",
         ":backend",
         ":util",
+        ":webnn",
     ],
 )
 

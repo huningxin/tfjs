@@ -29,6 +29,10 @@
 #include "tfjs-backend-wasm/src/cc/check_macros.h"
 #include "tfjs-backend-wasm/src/cc/util.h"
 
+#include <webnn/webnn.h>
+#include <webnn/webnn_proc.h>
+#include <webnn_native/WebnnNative.h>
+
 namespace {
 // Maps a unique tensor id to info about that tensor. The map owns all of its
 // entries.
@@ -88,6 +92,23 @@ extern "C" {
 #ifdef __EMSCRIPTEN__
 EMSCRIPTEN_KEEPALIVE
 #endif
+
+WebnnNeuralNetworkContext g_webnn_context = nullptr;
+
+void WebnnErrorCallback(WebnnErrorType type, char const * message, void * userdata) {
+    printf("[WEBNN] error type %d message %s\n", type, message);
+}
+
+WebnnNeuralNetworkContext get_webnn_context() {
+  if (!g_webnn_context) {
+    WebnnProcTable backend_procs = webnn_native::GetProcs();
+    webnnProcSetProcs(&backend_procs);
+    g_webnn_context = webnn_native::CreateNeuralNetworkContext();
+    webnnNeuralNetworkContextSetUncapturedErrorCallback(g_webnn_context, WebnnErrorCallback, nullptr);
+  }
+  return g_webnn_context;
+}
+
 void init() { xnn_initialize(nullptr); }
 
 #ifdef __EMSCRIPTEN__
