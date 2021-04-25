@@ -118,27 +118,6 @@ void associate_tensor_with_key(
   }
 }
 
-#if defined(USE_WEBNN_OP)
-void webnn_compile_callback(WebnnCompileStatus status, WebnnCompilation compilation, char const * message, void * userdata) {
-  if (status == WebnnCompileStatus_Success) {
-    WebnnCompilation* conv2d_op = reinterpret_cast<WebnnCompilation*>(userdata);
-    *conv2d_op = compilation;
-  } else {
-    printf("[WEBNN] compile error status: %d, message: %s\n", status, message);
-  }
-}
-
-void webnn_compute_callback(WebnnComputeStatus status, WebnnNamedResults outputs, char const * message, void * userdata) {
-  if (status == WebnnComputeStatus_Success) {
-    bool* success = reinterpret_cast<bool*>(userdata);
-    *success = true;
-  } else {
-    printf("[WEBNN] compute error status: %d, message: %s\n", status, message);
-  }
-}
-
-#endif
-
 }  // namespace
 
 namespace tfjs {
@@ -273,7 +252,7 @@ void conv2d(const size_t x_id, const size_t batch_size,
     }
 
 #if defined(USE_WEBNN_OP)
-    WebnnNeuralNetworkContext context = get_webnn_context();
+    WebnnNeuralNetworkContext context = webnn_get_context();
     WebnnModelBuilder builder = webnnNeuralNetworkContextCreateModelBuilder(context);
 
     WebnnConv2dOptions options;
@@ -315,8 +294,15 @@ void conv2d(const size_t x_id, const size_t batch_size,
     WebnnOperand filter = webnnModelBuilderConstant(builder, &filter_desc, filter_value, filter_size);
 
     int32_t padding[4] = {pad_top, pad_bottom, pad_left, pad_right};
-    options.padding = padding;
-    options.paddingCount = 4;
+    if (!is_same_pad) {
+      options.autoPad = WebnnAutoPad_Explicit;
+      options.padding = padding;
+      options.paddingCount = 4;
+    } else {
+      options.autoPad = WebnnAutoPad_SameUpper;
+      options.padding = nullptr;
+      options.paddingCount = 0;
+    }
 
     int32_t strides[2] = {stride_height, stride_width};
     options.strides = strides;
@@ -355,9 +341,9 @@ void conv2d(const size_t x_id, const size_t batch_size,
     WebnnNamedOperands outputs = webnnCreateNamedOperands();
     webnnNamedOperandsSet(outputs, "out", output);
     WebnnModel model = webnnModelBuilderCreateModel(builder, outputs);
-    webnnModelCompile(model, webnn_compile_callback, &conv2d_op, nullptr);
+    conv2d_op = webnnModelCompileSync(model, nullptr);
     if (conv2d_op == nullptr) {
-      util::warn("[WebNN] compile conv2d_op failed.\n");
+      util::warn("[WebNN] failed to compile conv2d_op.\n");
       return;
     }
 #else
@@ -403,10 +389,9 @@ void conv2d(const size_t x_id, const size_t batch_size,
   out.buffer = out_buf;
   out.size = out_info.size * sizeof(float);
   webnnNamedOutputsSet(outputs, "out", &out);
-  bool success = false;
-  webnnCompilationCompute(conv2d_op, inputs, webnn_compute_callback, &success, outputs);
-  if (!success) {
-    util::warn("[WebNN] compute conv2d_op failed.\n");
+  WebnnNamedResults results = webnnCompilationComputeSync(conv2d_op, inputs, outputs);
+  if (!results) {
+    util::warn("[WebNN] failed to compute conv2d_op.\n");
     return;
   }
 #else

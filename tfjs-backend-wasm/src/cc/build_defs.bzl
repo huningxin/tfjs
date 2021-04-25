@@ -18,7 +18,7 @@ def tfjs_unit_test(name, srcs, deps = [], copts = ["-Itfjs-backend-wasm/src/cc/w
         copts = copts,
     )
 
-def tfjs_cc_library(name, srcs = [], hdrs = [], deps = [], copts = ["-Itfjs-backend-wasm/src/cc/webnn/include/"]):
+def tfjs_cc_library(name, srcs = [], hdrs = [], deps = [], copts = [""]):
     """CC library for TensorFlow.js
     Args:
       name: The name of the TensorFlow.js cc library to define.

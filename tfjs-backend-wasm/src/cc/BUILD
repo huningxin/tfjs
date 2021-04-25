@@ -29,6 +29,8 @@ cc_binary(
         "-s MODULARIZE=1",
         "-s EXPORT_NAME=WasmBackendModule",
         "-s MALLOC=emmalloc",
+        "-s USE_WEBNN=1",
+        "-s ASSERTIONS=1",
     ],
     deps = [
         ":all_kernels",
@@ -54,6 +56,8 @@ cc_binary(
         "-s EXPORTED_FUNCTIONS='[\"_malloc\", \"_free\"]'",
         "-s EXTRA_EXPORTED_RUNTIME_METHODS='[\"cwrap\"]'",
         "-s MALLOC=emmalloc",
+        "-s USE_WEBNN=1",
+        "-s ASSERTIONS=1",
     ],
     deps = [
         ":all_kernels",
@@ -79,6 +83,8 @@ cc_binary(
         "-s MALLOC=emmalloc",
         "-s USE_PTHREADS=1",
         "-s PROXY_TO_PTHREAD=1",
+        "-s USE_WEBNN=1",
+        "-s ASSERTIONS=1",
     ],
     deps = [
         ":all_kernels",
@@ -114,8 +120,8 @@ tfjs_cc_library(
     deps = [
         ":check_macros",
         ":util",
-        # "@xnnpack//:xnnpack_operators_nhwc_f32",
-        ":webnn",
+        "@xnnpack//:xnnpack_operators_nhwc_f32",
+        # ":webnn",
     ],
 )
 

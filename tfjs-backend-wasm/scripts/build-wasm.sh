@@ -24,7 +24,7 @@ set -e
 set -x
 
 # Default build.
-yarn bazel build -c opt //tfjs-backend-wasm/src/cc:tfjs-backend-wasm.js --config=wasm
+yarn bazel build -c dbg //tfjs-backend-wasm/src/cc:tfjs-backend-wasm.js --config=wasm --copt="-DUSE_WEBNN_OP" --copt="-Wno-c++11-narrowing"
 # The typescript code and karma config expect the output of emscripten to be in
 # wasm-out/ so we copy the bazel output there.
 cp -f ../../dist/bin/tfjs-backend-wasm/src/cc/tfjs-backend-wasm.js \

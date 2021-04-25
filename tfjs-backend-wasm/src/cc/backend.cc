@@ -29,9 +29,21 @@
 #include "tfjs-backend-wasm/src/cc/check_macros.h"
 #include "tfjs-backend-wasm/src/cc/util.h"
 
+#if defined(USE_WEBNN_OP)
 #include <webnn/webnn.h>
+#ifdef __EMSCRIPTEN__
+#include <emscripten.h>
+#include <emscripten/html5.h>
+#include <emscripten/html5_webnn.h>
+#else
+#include <iostream>
+#include <ctime>
+#include <condition_variable>
+#include <pthread.h>
 #include <webnn/webnn_proc.h>
 #include <webnn_native/WebnnNative.h>
+#endif
+#endif
 
 namespace {
 // Maps a unique tensor id to info about that tensor. The map owns all of its
@@ -89,26 +101,34 @@ namespace wasm {
 // We use C-style API to interface with Javascript.
 extern "C" {
 
-#ifdef __EMSCRIPTEN__
-EMSCRIPTEN_KEEPALIVE
-#endif
-
+#if defined(USE_WEBNN_OP)
 WebnnNeuralNetworkContext g_webnn_context = nullptr;
 
+#ifndef __EMSCRIPTEN__
 void WebnnErrorCallback(WebnnErrorType type, char const * message, void * userdata) {
     printf("[WEBNN] error type %d message %s\n", type, message);
 }
+#endif
 
-WebnnNeuralNetworkContext get_webnn_context() {
+WebnnNeuralNetworkContext webnn_get_context() {
   if (!g_webnn_context) {
+#ifdef __EMSCRIPTEN__
+    g_webnn_context = emscripten_webnn_create_neural_network_context();
+#else
     WebnnProcTable backend_procs = webnn_native::GetProcs();
     webnnProcSetProcs(&backend_procs);
     g_webnn_context = webnn_native::CreateNeuralNetworkContext();
     webnnNeuralNetworkContextSetUncapturedErrorCallback(g_webnn_context, WebnnErrorCallback, nullptr);
+#endif
   }
   return g_webnn_context;
 }
 
+#endif
+
+#ifdef __EMSCRIPTEN__
+EMSCRIPTEN_KEEPALIVE
+#endif
 void init() { xnn_initialize(nullptr); }
 
 #ifdef __EMSCRIPTEN__
