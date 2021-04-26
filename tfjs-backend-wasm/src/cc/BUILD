@@ -30,7 +30,6 @@ cc_binary(
         "-s EXPORT_NAME=WasmBackendModule",
         "-s MALLOC=emmalloc",
         "-s USE_WEBNN=1",
-        "-s ASSERTIONS=1",
     ],
     deps = [
         ":all_kernels",
@@ -57,7 +56,6 @@ cc_binary(
         "-s EXTRA_EXPORTED_RUNTIME_METHODS='[\"cwrap\"]'",
         "-s MALLOC=emmalloc",
         "-s USE_WEBNN=1",
-        "-s ASSERTIONS=1",
     ],
     deps = [
         ":all_kernels",
@@ -84,7 +82,6 @@ cc_binary(
         "-s USE_PTHREADS=1",
         "-s PROXY_TO_PTHREAD=1",
         "-s USE_WEBNN=1",
-        "-s ASSERTIONS=1",
     ],
     deps = [
         ":all_kernels",

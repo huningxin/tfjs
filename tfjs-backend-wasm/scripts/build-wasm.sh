@@ -24,7 +24,7 @@ set -e
 set -x
 
 # Default build.
-yarn bazel build -c dbg //tfjs-backend-wasm/src/cc:tfjs-backend-wasm.js --config=wasm --copt="-DUSE_WEBNN_OP" --copt="-Wno-c++11-narrowing"
+yarn bazel build -c opt //tfjs-backend-wasm/src/cc:tfjs-backend-wasm.js --config=wasm --copt="-DUSE_WEBNN_OP" --copt="-Wno-c++11-narrowing"
 # The typescript code and karma config expect the output of emscripten to be in
 # wasm-out/ so we copy the bazel output there.
 cp -f ../../dist/bin/tfjs-backend-wasm/src/cc/tfjs-backend-wasm.js \
@@ -33,12 +33,12 @@ cp -f ../../dist/bin/tfjs-backend-wasm/src/cc/tfjs-backend-wasm.js \
 
 if [[ "$1" != "--dev" ]]; then
   # SIMD build.
-  yarn bazel build -c opt //tfjs-backend-wasm/src/cc:tfjs-backend-wasm-simd.js --config=wasm --copt="-msimd128"
+  yarn bazel build -c opt //tfjs-backend-wasm/src/cc:tfjs-backend-wasm-simd.js --config=wasm --copt="-msimd128" --copt="-DUSE_WEBNN_OP" --copt="-Wno-c++11-narrowing"
   cp -f ../../dist/bin/tfjs-backend-wasm/src/cc/tfjs-backend-wasm-simd.wasm \
         ../wasm-out/
 
   # Threaded + SIMD build.
-  yarn bazel build -c opt //tfjs-backend-wasm/src/cc:tfjs-backend-wasm-threaded-simd.js --config=wasm --copt="-pthread" --copt="-msimd128"
+  yarn bazel build -c opt //tfjs-backend-wasm/src/cc:tfjs-backend-wasm-threaded-simd.js --config=wasm --copt="-pthread" --copt="-msimd128" --copt="-DUSE_WEBNN_OP" --copt="-Wno-c++11-narrowing"
   cp -f ../../dist/bin/tfjs-backend-wasm/src/cc/tfjs-backend-wasm-threaded-simd.js \
         ../../dist/bin/tfjs-backend-wasm/src/cc/tfjs-backend-wasm-threaded-simd.worker.js \
         ../../dist/bin/tfjs-backend-wasm/src/cc/tfjs-backend-wasm-threaded-simd.wasm \
