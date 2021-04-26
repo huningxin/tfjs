@@ -383,11 +383,15 @@ void conv2d(const size_t x_id, const size_t batch_size,
   WebnnInput x;
   x.buffer = x_buf;
   x.size = x_info.size * sizeof(float);
+  x.dimensions = nullptr;
+  x.dimensionsCount = 0;
   webnnNamedInputsSet(inputs, "x", &x);
   WebnnNamedOutputs outputs = webnnCreateNamedOutputs();
   WebnnOutput out;
   out.buffer = out_buf;
   out.size = out_info.size * sizeof(float);
+  out.dimensions = nullptr;
+  out.dimensionsCount = 0;
   webnnNamedOutputsSet(outputs, "out", &out);
   WebnnNamedResults results = webnnCompilationComputeSync(conv2d_op, inputs, outputs);
   if (!results) {
