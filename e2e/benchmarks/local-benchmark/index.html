@@ -19,7 +19,7 @@ limitations under the License.
   <title>TensorFlow.js Model Benchmark</title>
   <link href="https://fonts.googleapis.com/css?family=Roboto" rel="stylesheet">
   <link href="./main.css" rel="stylesheet">
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/dat-gui/0.7.7/dat.gui.min.js"></script>
+  <script src="./dat.gui.min.js"></script>
   <link rel="shortcut icon"
     href="https://www.gstatic.com/devrel-devsite/prod/vf4ca28c48392b1412e7b030290622a0dd55b62dec1202c59f119b1e23227c988/tensorflow/images/favicon.png">
 </head>
@@ -86,12 +86,14 @@ limitations under the License.
       <tbody></tbody>
     </table>
   </div>
+  <!-- <script src="../../../webnn-polyfill/dist/webnn-polyfill.js"></script> -->
   <script src="https://unpkg.com/@tensorflow/tfjs-core@latest/dist/tf-core.js"></script>
   <script src="https://unpkg.com/@tensorflow/tfjs-backend-cpu@latest/dist/tf-backend-cpu.js"></script>
   <script src="https://unpkg.com/@tensorflow/tfjs-backend-webgl@latest/dist/tf-backend-webgl.js"></script>
   <script src="https://unpkg.com/@tensorflow/tfjs-layers@latest/dist/tf-layers.js"></script>
   <script src="https://unpkg.com/@tensorflow/tfjs-converter@latest/dist/tf-converter.js"></script>
-  <script src="https://unpkg.com/@tensorflow/tfjs-backend-wasm@latest/dist/tf-backend-wasm.js"></script>
+  <script src="../../../tfjs-backend-wasm/dist/tf-backend-wasm.min.js"></script>
+  <!-- <script src="https://unpkg.com/@tensorflow/tfjs-backend-wasm@latest/dist/tf-backend-wasm.js"></script> -->
   <script src="https://unpkg.com/@tensorflow/tfjs-automl@latest/dist/tf-automl.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/universal-sentence-encoder"></script>
   <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/speech-commands"> </script>
@@ -102,6 +104,12 @@ limitations under the License.
   <script src="../benchmark_util.js"></script>
   <script src="./util.js"></script>
   <script src="./index.js"></script>
+  <script>
+    if (tf.env().flags.IS_NODE) {
+      var webnn = require('../../../../webnn-native/node/lib/webnn');
+      navigator.ml = webnn.ml;
+    }
+  </script>
   <script>
     'use strict';
 
