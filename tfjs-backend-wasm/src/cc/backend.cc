@@ -102,23 +102,23 @@ namespace wasm {
 extern "C" {
 
 #if defined(USE_WEBNN_OP)
-WebnnNeuralNetworkContext g_webnn_context = nullptr;
+MLContext g_webnn_context = nullptr;
 
 #ifndef __EMSCRIPTEN__
-void WebnnErrorCallback(WebnnErrorType type, char const * message, void * userdata) {
+void WebnnErrorCallback(MLErrorType type, char const * message, void * userdata) {
     printf("[WEBNN] error type %d message %s\n", type, message);
 }
 #endif
 
-WebnnNeuralNetworkContext webnn_get_context() {
+MLContext webnn_get_context() {
   if (!g_webnn_context) {
 #ifdef __EMSCRIPTEN__
-    g_webnn_context = emscripten_webnn_create_neural_network_context();
+    g_webnn_context = emscripten_webnn_create_context();
 #else
     WebnnProcTable backend_procs = webnn_native::GetProcs();
     webnnProcSetProcs(&backend_procs);
-    g_webnn_context = webnn_native::CreateNeuralNetworkContext();
-    webnnNeuralNetworkContextSetUncapturedErrorCallback(g_webnn_context, WebnnErrorCallback, nullptr);
+    g_webnn_context = webnn_native::CreateContext();
+    mlContextSetUncapturedErrorCallback(g_webnn_context, WebnnErrorCallback, nullptr);
 #endif
   }
   return g_webnn_context;

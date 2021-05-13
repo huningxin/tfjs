@@ -100,7 +100,7 @@ namespace wasm {
 extern "C" {
 
 #if defined(USE_WEBNN_OP)
-WebnnNeuralNetworkContext webnn_get_context();
+MLContext webnn_get_context();
 #endif
 
 // Initializes the WASM backend.

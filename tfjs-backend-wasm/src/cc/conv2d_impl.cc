@@ -49,7 +49,7 @@ typedef std::tuple<size_t, size_t, size_t, size_t, size_t, size_t, size_t,
 
 struct CachedInfo {
 #if defined(USE_WEBNN_OP)
-  WebnnCompilation op;
+  MLGraph op;
 #else
   xnn_operator_t op;
 #endif
@@ -83,7 +83,7 @@ void erase_from_cache(const size_t tensor_id,
         auto& cached_info = operator_cache_key_idx->second;
 #if defined(USE_WEBNN_OP)
         if (cached_info.op != nullptr) {
-          webnnCompilationRelease(cached_info.op);
+          mlGraphRelease(cached_info.op);
         }
 #else
         xnn_delete_operator(cached_info.op);
@@ -154,7 +154,7 @@ void conv2d(const size_t x_id, const size_t batch_size,
   }
 
 #if defined(USE_WEBNN_OP)
-  WebnnCompilation conv2d_op = nullptr;
+  MLGraph conv2d_op = nullptr;
 #else
   xnn_operator_t conv2d_op = nullptr;
 #endif
@@ -252,54 +252,54 @@ void conv2d(const size_t x_id, const size_t batch_size,
     }
 
 #if defined(USE_WEBNN_OP)
-    WebnnNeuralNetworkContext context = webnn_get_context();
-    WebnnModelBuilder builder = webnnNeuralNetworkContextCreateModelBuilder(context);
+    MLContext context = webnn_get_context();
+    MLGraphBuilder builder = webnnCreateGraphBuilder(context);
 
-    WebnnConv2dOptions options;
-    options.inputLayout = WebnnInputOperandLayout::WebnnInputOperandLayout_Nhwc;
+    MLConv2dOptions options;
+    options.inputLayout = MLInputOperandLayout::MLInputOperandLayout_Nhwc;
     int32_t input_dims[4] = {
         static_cast<int32_t>(batch_size),
         static_cast<int32_t>(input_height),
         static_cast<int32_t>(input_width),
         static_cast<int32_t>(input_channels)
     };
-    WebnnOperandDescriptor input_desc;
-    input_desc.type = WebnnOperandType::WebnnOperandType_Float32;
+    MLOperandDescriptor input_desc;
+    input_desc.type = MLOperandType::MLOperandType_Float32;
     input_desc.dimensions = input_dims;
     input_desc.dimensionsCount = 4;
-    WebnnOperand input = webnnModelBuilderInput(builder, "x", &input_desc);
+    MLOperand input = mlGraphBuilderInput(builder, "x", &input_desc);
 
     int32_t filter_dims[4];
     if (is_depthwise && groups != 1) {
       options.groups = groups;
-      options.filterLayout = WebnnFilterOperandLayout::WebnnFilterOperandLayout_Hwio;
+      options.filterLayout = MLFilterOperandLayout::MLFilterOperandLayout_Hwio;
       filter_dims[0] = static_cast<int32_t>(filter_height);
       filter_dims[1] = static_cast<int32_t>(filter_width);
       filter_dims[2] = static_cast<int32_t>(1);
       filter_dims[3] = static_cast<int32_t>(groups);
     } else {
       options.groups = 1;
-      options.filterLayout = WebnnFilterOperandLayout::WebnnFilterOperandLayout_Ohwi;
+      options.filterLayout = MLFilterOperandLayout::MLFilterOperandLayout_Ohwi;
       filter_dims[0] = static_cast<int32_t>(output_channels);
       filter_dims[1] = static_cast<int32_t>(filter_height);
       filter_dims[2] = static_cast<int32_t>(filter_width);
       filter_dims[3] = static_cast<int32_t>(input_channels);
     };
-    WebnnOperandDescriptor filter_desc;
-    filter_desc.type = WebnnOperandType::WebnnOperandType_Float32;
+    MLOperandDescriptor filter_desc;
+    filter_desc.type = MLOperandType::MLOperandType_Float32;
     filter_desc.dimensions = filter_dims;
     filter_desc.dimensionsCount = 4;
     const void* filter_value = reinterpret_cast<const void*>(filter_xnn);
     size_t filter_size = filter_dims[0] * filter_dims[1] * filter_dims[2] * filter_dims[3] * sizeof(float);
-    WebnnOperand filter = webnnModelBuilderConstant(builder, &filter_desc, filter_value, filter_size);
+    MLOperand filter = mlGraphBuilderConstant(builder, &filter_desc, filter_value, filter_size);
 
     int32_t padding[4] = {pad_top, pad_bottom, pad_left, pad_right};
     if (!is_same_pad) {
-      options.autoPad = WebnnAutoPad_Explicit;
+      options.autoPad = MLAutoPad_Explicit;
       options.padding = padding;
       options.paddingCount = 4;
     } else {
-      options.autoPad = WebnnAutoPad_SameUpper;
+      options.autoPad = MLAutoPad_SameUpper;
       options.padding = nullptr;
       options.paddingCount = 0;
     }
@@ -312,36 +312,35 @@ void conv2d(const size_t x_id, const size_t batch_size,
     options.dilations = dilations;
     options.dilationsCount = 2;
 
-    WebnnOperand output = webnnModelBuilderConv2d(builder, input, filter, &options);
+    MLOperand output = mlGraphBuilderConv2d(builder, input, filter, &options);
 
     if (bias_buf != nullptr) {
-      WebnnOperandDescriptor bias_desc;
+      MLOperandDescriptor bias_desc;
       int32_t bias_dims[1] = {output_channels};
-      bias_desc.type = WebnnOperandType::WebnnOperandType_Float32;
+      bias_desc.type = MLOperandType::MLOperandType_Float32;
       bias_desc.dimensions = bias_dims;
       bias_desc.dimensionsCount = 1;
       const void* bias_value = reinterpret_cast<const void*>(bias_buf);
       size_t bias_size = bias_dims[0] * sizeof(float);
-      WebnnOperand bias = webnnModelBuilderConstant(builder, &bias_desc, bias_value, bias_size);
-      output = webnnModelBuilderAdd(builder, output, bias);
+      MLOperand bias = mlGraphBuilderConstant(builder, &bias_desc, bias_value, bias_size);
+      output = mlGraphBuilderAdd(builder, output, bias);
     }
 
     if (activation == FusableActivation::RELU || activation == FusableActivation::RELU6) {
-      WebnnOperandDescriptor min_max_desc;
+      MLOperandDescriptor min_max_desc;
       int32_t min_max_dims[1] = {1};
-      min_max_desc.type = WebnnOperandType::WebnnOperandType_Float32;
+      min_max_desc.type = MLOperandType::MLOperandType_Float32;
       min_max_desc.dimensions = min_max_dims;
       min_max_desc.dimensionsCount = 1;
-      WebnnClampOptions options;
-      options.minValue = webnnModelBuilderConstant(builder, &min_max_desc, reinterpret_cast<const void*>(&output_min), sizeof(float));
-      options.maxValue = webnnModelBuilderConstant(builder, &min_max_desc, reinterpret_cast<const void*>(&output_max), sizeof(float));
-      output = webnnModelBuilderClamp(builder, output, &options);
+      MLClampOptions options;
+      options.minValue = mlGraphBuilderConstant(builder, &min_max_desc, reinterpret_cast<const void*>(&output_min), sizeof(float));
+      options.maxValue = mlGraphBuilderConstant(builder, &min_max_desc, reinterpret_cast<const void*>(&output_max), sizeof(float));
+      output = mlGraphBuilderClamp(builder, output, &options);
     }
 
-    WebnnNamedOperands outputs = webnnCreateNamedOperands();
-    webnnNamedOperandsSet(outputs, "out", output);
-    WebnnModel model = webnnModelBuilderCreateModel(builder, outputs);
-    conv2d_op = webnnModelCompileSync(model, nullptr);
+    MLNamedOperands outputs = webnnCreateNamedOperands();
+    mlNamedOperandsSet(outputs, "out", output);
+    conv2d_op = mlGraphBuilderBuildSync(builder, outputs);
     if (conv2d_op == nullptr) {
       util::warn("[WebNN] failed to compile conv2d_op.\n");
       return;
@@ -379,22 +378,22 @@ void conv2d(const size_t x_id, const size_t batch_size,
   }
 
 #if defined(USE_WEBNN_OP)
-  WebnnNamedInputs inputs = webnnCreateNamedInputs();
-  WebnnInput x;
+  MLNamedInputs inputs = webnnCreateNamedInputs();
+  MLInput x;
   x.buffer = x_buf;
   x.size = x_info.size * sizeof(float);
   x.dimensions = nullptr;
   x.dimensionsCount = 0;
-  webnnNamedInputsSet(inputs, "x", &x);
-  WebnnNamedOutputs outputs = webnnCreateNamedOutputs();
-  WebnnOutput out;
+  mlNamedInputsSet(inputs, "x", &x);
+  MLNamedOutputs outputs = webnnCreateNamedOutputs();
+  MLOutput out;
   out.buffer = out_buf;
   out.size = out_info.size * sizeof(float);
   out.dimensions = nullptr;
   out.dimensionsCount = 0;
-  webnnNamedOutputsSet(outputs, "out", &out);
-  WebnnNamedResults results = webnnCompilationComputeSync(conv2d_op, inputs, outputs);
-  if (!results) {
+  mlNamedOutputsSet(outputs, "out", &out);
+  MLComputeGraphStatus status = mlGraphComputeSync(conv2d_op, inputs, outputs);
+  if (status != MLComputeGraphStatus_Success) {
     util::warn("[WebNN] failed to compute conv2d_op.\n");
     return;
   }
