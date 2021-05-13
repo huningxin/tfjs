@@ -86,14 +86,11 @@ limitations under the License.
       <tbody></tbody>
     </table>
   </div>
-  <!-- <script src="../../../webnn-polyfill/dist/webnn-polyfill.js"></script> -->
   <script src="https://unpkg.com/@tensorflow/tfjs-core@latest/dist/tf-core.js"></script>
   <script src="https://unpkg.com/@tensorflow/tfjs-backend-cpu@latest/dist/tf-backend-cpu.js"></script>
   <script src="https://unpkg.com/@tensorflow/tfjs-backend-webgl@latest/dist/tf-backend-webgl.js"></script>
   <script src="https://unpkg.com/@tensorflow/tfjs-layers@latest/dist/tf-layers.js"></script>
   <script src="https://unpkg.com/@tensorflow/tfjs-converter@latest/dist/tf-converter.js"></script>
-  <script src="../../../tfjs-backend-wasm/dist/tf-backend-wasm.min.js"></script>
-  <!-- <script src="https://unpkg.com/@tensorflow/tfjs-backend-wasm@latest/dist/tf-backend-wasm.js"></script> -->
   <script src="https://unpkg.com/@tensorflow/tfjs-automl@latest/dist/tf-automl.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/universal-sentence-encoder"></script>
   <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/speech-commands"> </script>
@@ -105,13 +102,19 @@ limitations under the License.
   <script src="./util.js"></script>
   <script src="./index.js"></script>
   <script>
-    if (tf.env().flags.IS_NODE) {
-      var webnn = require('../../../../webnn-native/node/lib/webnn');
-      navigator.ml = webnn.ml;
-    }
-  </script>
-  <script>
     'use strict';
+
+    const script = document.createElement('script');
+    if (tf.env().flags.IS_NODE) {
+      script.src = '../../../tfjs-backend-wasm/dist/tf-backend-wasm.min.js';
+      const webnn = require('../../../../webnn-native/node/lib/webnn');
+      navigator.ml = webnn.ml;
+      window.MLGraphBuilder = webnn.MLGraphBuilder;
+    } else {
+      script.src = 'https://unpkg.com/@tensorflow/tfjs-backend-wasm@latest/dist/tf-backend-wasm.js';
+    }
+    document.head.append(script)
+    script.onload = onPageLoad;
 
     let urlState = null;
     let runTimes = 50;
@@ -807,8 +810,6 @@ limitations under the License.
       await showEnvironment();
       updateGUIFromURLState();
     }
-
-    onPageLoad();
   </script>
 </body>
 
