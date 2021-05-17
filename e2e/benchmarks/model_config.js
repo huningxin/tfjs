@@ -333,6 +333,17 @@ const benchmarks = {
       };
     }
   },
+  'conv2d': {
+    type: '3x3 conv2d, 512 (VGG16)',
+    load: async () => {
+      return {x: tf.ones([1, 28, 28, 512]), f: tf.ones([3, 3, 512, 512])};
+    },
+    predictFunc: () => {
+      return async (model, customInput) => {
+        return tf.conv2d(model.x, model.f, 1, 'same');
+      };
+    }
+  }
 };
 
 

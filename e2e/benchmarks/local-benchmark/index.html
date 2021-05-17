@@ -169,7 +169,7 @@ limitations under the License.
 
     const state = {
       numRuns: runTimes,
-      benchmark: 'mobilenet_v2',
+      benchmark: 'conv2d',
       run: (v) => {
         runBenchmark().catch(e => {
           showMsg('Error: ' + e.message);
