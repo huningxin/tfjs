@@ -63,3 +63,27 @@ shape = `[-1, 224, 224, 3]`), you are requires to set it to a valid shape
 In the Inputs section you will see an input box for you to update the shape.
 Once the shape is set, you can click the 'Run benchmark' button again to run
 the benchmark.
+
+## Running tfjs benchmarks in Electron.js with WebNN-native
+
+### Build tfjs wasm backend with Emscripten with WebNN support
+
+https://github.com/huningxin/emscripten/tree/webnn_2.0.14
+
+### Install Electron.js
+
+```shell
+$ npm install
+```
+
+### Install webnn-node
+
+```shell
+$ npm install <path_to_webnn_node> --webnn_native_lib_path=<relative_path_to_webnn_native_lib>
+```
+
+### Run
+
+```shell
+$ npm start
+```

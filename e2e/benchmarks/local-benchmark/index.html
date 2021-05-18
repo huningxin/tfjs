@@ -107,7 +107,7 @@ limitations under the License.
     const script = document.createElement('script');
     if (tf.env().flags.IS_NODE) {
       script.src = '../../../tfjs-backend-wasm/dist/tf-backend-wasm.min.js';
-      const webnn = require('../../../../webnn-native/node/lib/webnn');
+      const webnn = require('webnn-node');
       navigator.ml = webnn.ml;
       window.MLGraphBuilder = webnn.MLGraphBuilder;
     } else {
