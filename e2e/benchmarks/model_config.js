@@ -96,10 +96,14 @@ const benchmarks = {
           'https://storage.googleapis.com/learnjs-data/mobilenet_v2_100_fused/model.json';
       return tf.loadGraphModel(url);
     },
-    loadTflite: async (enableProfiling = false, numThreads = 1) => {
+    loadTflite: async (enableProfiling = false, numThreads = -1) => {
       const url =
           'https://tfhub.dev/tensorflow/lite-model/mobilenet_v2_1.0_224/1/metadata/1';
-      return tflite.loadTFLiteModel(url, {numThreads, enableProfiling});
+      let options = {numThreads, enableProfiling};
+      if (numThreads = -1) {
+        options = {enableProfiling};
+      }
+      return tflite.loadTFLiteModel(url, options);
     },
     loadTfliteWebNN: async (enableWebNNDelegate=false, webNNDevicePreference=0, enableProfiling = false) => {
       // tflite_webnn doesn't support load model from url

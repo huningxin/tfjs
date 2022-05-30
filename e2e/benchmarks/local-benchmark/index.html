@@ -848,11 +848,10 @@ limitations under the License.
         await loadScript(url);
       }
       const hasMTSupport = await tf.env().getAsync('WASM_HAS_MULTITHREAD_SUPPORT');
+      console.log('WASM_HAS_MULTITHREAD_SUPPORT is ', hasMTSupport);
       if (hasMTSupport) {
-        console.log('WASM_HAS_MULTITHREAD_SUPPORT is true');
         await loadScript('./tflite-support/tflite_model_runner_cc_threaded_simd.js');
       } else {
-        console.log('WASM_HAS_MULTITHREAD_SUPPORT is false');
         await loadScript('./tflite-support/tflite_model_runner_cc_simd.js');
       }
 
