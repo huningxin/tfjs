@@ -288,7 +288,7 @@ limitations under the License.
     const parameterTable = document.querySelector('#parameters tbody');
     const modelInputsTable = document.querySelector('#modelInputs tbody');
 
-    let model, tfliteModel, predict, chartWidth;
+    let model, tfliteModel, tfliteWebNNModel, predict, chartWidth;
 
     async function showMsg(message) {
       if (message != null) {
@@ -417,7 +417,14 @@ limitations under the License.
       }
       let variableShape = false;
       const modelInputsElement = document.getElementById('modelInputs');
-      const inputs = isTflite() ? tfliteModel.inputs : model.inputs;
+      let inputs;
+      if (isTflite()) {
+        inputs = tfliteModel.inputs;
+      } else if(isTfliteWebNN()) {
+        inputs = getTfliteWebNNModelInputs();
+      } else {
+        inputs = model.inputs;
+      }
       if (inputs == null) {
         modelInputsElement.style.display = 'none';
       } else {
@@ -505,26 +512,46 @@ limitations under the License.
         throw new Error(`Please provide a loadTflite method for '${state.benchmark}' model.`);
       }
 
+      if ((benchmark['loadTfliteWebNN'] == null) && isTfliteWebNN()) {
+        throw new Error(`Please provide a loadTfliteWebNN method for '${state.benchmark}' model.`);
+      }
+
       await showMsg('Loading the model');
       let start = performance.now();
       const inputSize = parseFloat(state.inputSize);
       if (isTflite()) {
         await loadTfliteModel();
+      } else if (isTfliteWebNN()) {
+        await loadTfliteWebNNModel();
       } else {
         model = await benchmark.load(inputSize, state.architecture, state.inputType);
       }
       state.inputs = [];
-      const inputs = isTflite() ? tfliteModel.inputs : model.inputs
+      let inputs;
+      if (isTflite()) {
+        inputs = tfliteModel.inputs;
+      } else if(isTfliteWebNN()) {
+        inputs = getTfliteWebNNModelInputs();
+      } else {
+        inputs = model.inputs;
+      }
       if (inputs) {
         // construct the input state for the model
         for (let modelInputIndex = 0; modelInputIndex < inputs.length; modelInputIndex++) {
           let modelInput = inputs[modelInputIndex];
           if (modelInput.shape == null) continue;
-          let shape = modelInput.shape.map(e => e == null ? -1 : e);
+          let shape, dtype;
+          if (isTfliteWebNN()) {
+            dtype = modelInput.dataType;
+            shape = modelInput.shape.split(',').map(e=>parseInt(e));
+          } else {
+            dtype = modelInput.dtype;
+            shape = modelInput.shape.map(e => e == null ? -1 : e);
+          }
           state.inputs.push({
             name: modelInput.name,
             shape: [...shape],
-            dtype: modelInput.dtype,
+            dtype: dtype,
             range: [0, 1000]
           });
         }
@@ -615,22 +642,25 @@ limitations under the License.
       if (state.benchmark === 'custom') {
         const input = generateInputFromDef(state.inputs, model instanceof tf.GraphModel);
         try {
+          // TBD tflite_webnn backend
           profileInfo = await profileModelInference(model, input, isTflite(), numProfiles);
         } finally {
           tf.dispose(input);
         }
-      } else {
+      } else if (!isTfliteWebNN()) {
         profileInfo = await profileInference(() => predict(model), isTflite(), numProfiles);
       }
 
       const elapsed = performance.now() - start;
       await showMsg(null);
       // TODO: These are not supported by tflite models yet.
-      if (!isTflite()) {
+      if (!isTflite() && !isTfliteWebNN()) {
         appendRow(timeTable, 'Peak memory', printMemory(profileInfo.peakBytes));
         appendRow(timeTable, 'Leaked tensors', profileInfo.newTensors);
       }
-      appendRow(timeTable, 'Profile time', printTime(elapsed / numProfiles));
+      if (!isTfliteWebNN()) {
+        appendRow(timeTable, 'Profile time', printTime(elapsed / numProfiles));
+      }
 
       if (state.backend === 'webgl' && !queryTimerIsEnabled()) {
         await showMsg('Query timer extension is not available. <br/> ' +
@@ -638,9 +668,11 @@ limitations under the License.
           'not a direct measure of GPU execution time.');
       }
 
-      await showMsg('Profiling kernels');
-      appendRow(timeTable, 'Number of kernels', profileInfo.kernels.length);
-      showKernelTime(profileInfo);
+      if (!isTfliteWebNN()) {
+        await showMsg('Profiling kernels');
+        appendRow(timeTable, 'Number of kernels', profileInfo.kernels.length);
+        showKernelTime(profileInfo);
+      }
       await showMsg(null);
     }
 
@@ -705,7 +737,7 @@ limitations under the License.
     }
 
     async function runBenchmark() {
-      if (!tf.engine().backendNames().includes(state.backend) && !isTflite()) {
+      if (!tf.engine().backendNames().includes(state.backend) && !isTflite() && !isTfliteWebNN()) {
         return;
       }
       await tf.ready();
@@ -814,6 +846,14 @@ limitations under the License.
 
       for (let url of urls) {
         await loadScript(url);
+      }
+      const hasMTSupport = await tf.env().getAsync('WASM_HAS_MULTITHREAD_SUPPORT');
+      if (hasMTSupport) {
+        console.log('WASM_HAS_MULTITHREAD_SUPPORT is true');
+        await loadScript('./tflite-support/tflite_model_runner_cc_threaded_simd.js');
+      } else {
+        console.log('WASM_HAS_MULTITHREAD_SUPPORT is false');
+        await loadScript('./tflite-support/tflite_model_runner_cc_simd.js');
       }
 
       if (urlState && urlState.has('backend'))
@@ -940,7 +980,7 @@ limitations under the License.
 
       const envFolder = gui.addFolder('Environment');
       const backendsController = envFolder.add(
-        state, 'backend', ['wasm', 'webgl', 'cpu', 'webgpu', 'tflite']);
+        state, 'backend', ['wasm', 'webgl', 'cpu', 'webgpu', 'tflite', 'tflite_webnn']);
       backendsController.onChange(async backend => {
         // TODO: Failed to set backend
         if (state.backend === 'webgpu' && !tf.engine().backendNames().includes(state.backend)) {
@@ -950,14 +990,17 @@ limitations under the License.
         } else {
           showMsg(null);
         }
-        if (isTflite()) {
+        if (isTflite() || isTfliteWebNN()) {
           // Remove the "Test correctness" button which doesn't apply to tfjs-tflite.
-          correctnessButton.remove();
-          correctnessButton = null;
-
+          if (correctnessButton) {
+            correctnessButton.remove();
+            correctnessButton = null;
+          }
           // Update models drop down to only show models that support tflite.
-          const tfliteBenchmarks = Object.keys(benchmarks)
-            .filter(name => benchmarks[name].loadTflite);
+          const tfliteBenchmarks = isTflite() ? Object.keys(benchmarks)
+            .filter(name => benchmarks[name].loadTflite) :
+            Object.keys(benchmarks)
+            .filter(name => benchmarks[name].loadTfliteWebNN);
           updateModelsDropdown(tfliteBenchmarks);
           modelController.setValue(tfliteBenchmarks[0]);
           state.isModelLoaded = false;
@@ -994,12 +1037,29 @@ limitations under the License.
       return state.backend === 'tflite';
     }
 
+    function isTfliteWebNN() {
+      return state.backend === 'tflite_webnn';
+    }
+
     async function loadTfliteModel(enableProfiling = false) {
       if (tfliteModel) {
         tfliteModel.modelRunner.cleanUp();
       }
       const benchmark = benchmarks[state.benchmark];
-      tfliteModel = await benchmark.loadTflite(enableProfiling);
+      const numThreads = state.flags['NUM_THREADS'];
+      tfliteModel = await benchmark.loadTflite(enableProfiling, numThreads);
+    }
+
+    async function loadTfliteWebNNModel(enableProfiling = false) {
+      // if (tfliteWebNNModel) {
+      //   // no cleanUp() in tflite_webnn
+      //   tfliteWebNNModel.cleanUp();
+      // }
+      const benchmark = benchmarks[state.benchmark];
+      const enableWebNNDelegate = state.flags['ENABLE_WEBNN_DELEGATE'];
+      const webnnDevicePreference =state.flags['WEBNN_DEVICE_PREFERENCE'];
+      const webnnDevice = {'default': 0, 'gpu': 1, 'cpu': 2};
+      tfliteWebNNModel = await benchmark.loadTfliteWebNN(enableWebNNDelegate, webnnDevice[webnnDevicePreference], enableProfiling);
     }
 
     function updateModelsDropdown(newValues) {

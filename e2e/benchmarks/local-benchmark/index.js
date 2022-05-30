@@ -31,7 +31,13 @@ const BACKEND_FLAGS_MAP = {
     'CHECK_COMPUTATION_FOR_ERRORS', 'WEBGL_USE_SHAPES_UNIFORMS',
     'KEEP_INTERMEDIATE_TENSORS'
   ],
-  tflite: [],
+  tflite: [
+    'NUM_THREADS',
+  ],
+  tflite_webnn: [
+    'ENABLE_WEBNN_DELEGATE',
+    'WEBNN_DEVICE_PREFERENCE',
+  ],
 };
 if (tf.engine().backendNames().includes('webgpu')) {
   BACKEND_FLAGS_MAP['webgpu'] =
@@ -39,6 +45,9 @@ if (tf.engine().backendNames().includes('webgpu')) {
 }
 
 const TUNABLE_FLAG_NAME_MAP = {
+  NUM_THREADS: 'numThreads',
+  ENABLE_WEBNN_DELEGATE: 'enable webnn delegate',
+  WEBNN_DEVICE_PREFERENCE: 'webnn device preference',
   PROD: 'production mode',
   WEBGL_VERSION: 'webgl version',
   WASM_HAS_SIMD_SUPPORT: 'wasm SIMD',
@@ -184,10 +193,14 @@ async function initDefaultValueMap() {
   for (const backend in BACKEND_FLAGS_MAP) {
     for (let index = 0; index < BACKEND_FLAGS_MAP[backend].length; index++) {
       const flag = BACKEND_FLAGS_MAP[backend][index];
-      try {
-        TUNABLE_FLAG_DEFAULT_VALUE_MAP[flag] = await tf.env().getAsync(flag);
-      } catch (ex) {
-        console.warn(ex.message);
+      if (backend === 'tflite_webnn' || backend === 'tflite') {
+        TUNABLE_FLAG_DEFAULT_VALUE_MAP[flag] = TUNABLE_FLAG_VALUE_RANGE_MAP[flag][0];
+      } else {
+        try {
+          TUNABLE_FLAG_DEFAULT_VALUE_MAP[flag] = await tf.env().getAsync(flag);
+        } catch (ex) {
+          console.warn(ex.message);
+        }
       }
     }
   }
@@ -212,7 +225,9 @@ async function initDefaultValueMap() {
  */
 function getTunableRange(flag) {
   const defaultValue = TUNABLE_FLAG_DEFAULT_VALUE_MAP[flag];
-  if (flag === 'WEBGL_FORCE_F16_TEXTURES' ||
+  if (flag === 'WEBNN_DEVICE_PREFERENCE') {
+    return ['default', 'gpu', 'cpu'];
+  } else if (flag === 'WEBGL_FORCE_F16_TEXTURES' ||
       flag === 'WEBGL_PACK_DEPTHWISECONV' || 'KEEP_INTERMEDIATE_TENSORS') {
     return [false, true];
   } else if (flag === 'WEBGL_VERSION') {

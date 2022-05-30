@@ -96,15 +96,30 @@ const benchmarks = {
           'https://storage.googleapis.com/learnjs-data/mobilenet_v2_100_fused/model.json';
       return tf.loadGraphModel(url);
     },
-    loadTflite: async (enableProfiling = false) => {
+    loadTflite: async (enableProfiling = false, numThreads = 1) => {
       const url =
           'https://tfhub.dev/tensorflow/lite-model/mobilenet_v2_1.0_224/1/metadata/1';
-      return tflite.loadTFLiteModel(url, {enableProfiling});
+      return tflite.loadTFLiteModel(url, {numThreads, enableProfiling});
+    },
+    loadTfliteWebNN: async (enableWebNNDelegate=false, webNNDevicePreference=0, enableProfiling = false) => {
+      // tflite_webnn doesn't support load model from url
+      // const url =
+      //     'https://tfhub.dev/tensorflow/lite-model/mobilenet_v2_1.0_224/1/metadata/1';
+      const url = '../model/mobilenet_v2_1.0_224_1_metadata_1.tflite';
+      return loadTfliteWebNNRunner(url, enableWebNNDelegate, webNNDevicePreference, enableProfiling);
     },
     predictFunc: () => {
       const input = tf.randomNormal([1, 224, 224, 3]);
       if (isTflite()) {
         return () => tfliteModel.predict(input);
+      } else if (isTfliteWebNN()) {
+        const inputs = getTfliteWebNNModelInputs();
+        const inputTensorArray = input.dataSync();
+        const inputBuffer = inputs[0].data();
+        const inputData = new Float32Array(inputBuffer.length);
+        inputData.set(inputTensorArray);
+        inputBuffer.set(inputData);
+        return () => tfliteWebNNModel.Infer();
       } else {
         return predictFunction(model, input);
       }
@@ -403,8 +418,8 @@ const benchmarks = {
     load: async () => {
       return loadModelByUrlWithState(state.modelUrl, {}, state);
     },
-    loadTflite: async (enableProfiling = false) => {
-      return tflite.loadTFLiteModel(state.modelUrl, {enableProfiling});
+    loadTflite: async (enableProfiling = false, numThreads = 1) => {
+      return tflite.loadTFLiteModel(state.modelUrl, {numThreads, enableProfiling});
     },
     predictFunc: () => {
       return async (model, customInput) => {
@@ -431,6 +446,62 @@ const benchmarks = {
   },
 };
 
+function getTfliteWebNNModelInputs() {
+  const inputs = callAndDelete(
+    tfliteWebNNModel.GetInputs(), results => convertCppVectorToArray(results));
+  return inputs;
+}
+/** Converts the given c++ vector to a JS array. */
+function convertCppVectorToArray(vector) {
+  if (vector == null) return [];
+
+  const result = [];
+  for (let i = 0; i < vector.size(); i++) {
+    const item = vector.get(i);
+    result.push(item);
+  }
+  return result;
+}
+
+/**
+ * Calls the given function with the given deletable argument, ensuring that
+ * the argument gets deleted afterwards (even if the function throws an error).
+ */
+ function callAndDelete(arg, func) {
+  try {
+    return func(arg);
+  } finally {
+    if (arg != null) arg.delete();
+  }
+}
+
+async function loadTfliteWebNNRunner(url, enableWebNNDelegate, webNNDevicePreference, enableProfiling) {
+  // Load WASM module and model.
+  const [module, modelArrayBuffer] = await Promise.all([
+    tflite_model_runner_ModuleFactory(),
+    (await fetch(url)).arrayBuffer(),
+  ]);
+  const modelBytes = new Uint8Array(modelArrayBuffer);
+  const offset = module._malloc(modelBytes.length);
+  module.HEAPU8.set(modelBytes, offset);
+
+  // Create model runner.
+  const modelRunnerResult =
+  module.TFLiteWebModelRunner.CreateFromBufferAndOptions(
+    offset, modelBytes.length, {
+      numThreads: Math.min(
+        4, Math.max(1, (navigator.hardwareConcurrency || 1) / 2)),
+      enableWebNNDelegate: enableWebNNDelegate,
+      webNNDevicePreference: webNNDevicePreference, // 0 - default, 1 - gpu, 2 - cpu
+      enableProfiling: enableProfiling,
+    });
+  if (!modelRunnerResult.ok()) {
+    throw new Error(
+      'Failed to create TFLiteWebModelRunner: ' + modelRunnerResult.errorMessage());
+  }
+  const modelRunner = modelRunnerResult.value();
+  return modelRunner;
+}
 
 const imageBucket =
     'https://storage.googleapis.com/tfjs-models/assets/posenet/';
