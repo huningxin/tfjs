@@ -194,7 +194,11 @@ async function initDefaultValueMap() {
     for (let index = 0; index < BACKEND_FLAGS_MAP[backend].length; index++) {
       const flag = BACKEND_FLAGS_MAP[backend][index];
       if (backend === 'tflite_webnn' || backend === 'tflite') {
-        TUNABLE_FLAG_DEFAULT_VALUE_MAP[flag] = TUNABLE_FLAG_VALUE_RANGE_MAP[flag][0];
+        if (flag === 'ENABLE_WEBNN_DELEGATE') {
+          TUNABLE_FLAG_DEFAULT_VALUE_MAP[flag] = hasWebNN();
+        } else {
+          TUNABLE_FLAG_DEFAULT_VALUE_MAP[flag] = TUNABLE_FLAG_VALUE_RANGE_MAP[flag][0];
+        }
       } else {
         try {
           TUNABLE_FLAG_DEFAULT_VALUE_MAP[flag] = await tf.env().getAsync(flag);

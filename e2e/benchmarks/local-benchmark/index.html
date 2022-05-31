@@ -309,10 +309,15 @@ limitations under the License.
       }, null, 2);
     }
 
+    function hasWebNN() {
+      return typeof MLGraphBuilder !== 'undefined';
+    }
+
     async function showEnvironment() {
       await tf.time(() => tf.add(tf.tensor1d([1]), tf.tensor1d([1])).data());
       const sortedFeatures = Object.keys(tf.env().features).sort().map(
         name => `  ${name}: ${tf.env().features[name]}`);
+      sortedFeatures.push(`  HAS_WEBNN: ${hasWebNN()}`)
       envDiv.innerHTML += `<br/>{<br>${sortedFeatures.join('<br>')}<br>}`;
     }
 

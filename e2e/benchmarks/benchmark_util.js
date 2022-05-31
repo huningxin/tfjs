@@ -476,7 +476,7 @@ function aggregateKernelTime(kernels) {
 const TUNABLE_FLAG_VALUE_RANGE_MAP = {
   NUM_THREADS:  [-1, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16],
   ENABLE_WEBNN_DELEGATE: [true, false],
-  WEBNN_DEVICE_PREFERENCE: ['default', 'gpu', 'cpu'],
+  WEBNN_DEVICE_PREFERENCE: ['cpu', 'gpu'],
   WEBGL_VERSION: [1, 2],
   WASM_HAS_SIMD_SUPPORT: [true, false],
   WASM_HAS_MULTITHREAD_SUPPORT: [true, false],
