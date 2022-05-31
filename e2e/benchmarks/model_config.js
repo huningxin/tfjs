@@ -88,6 +88,12 @@ function predictFunction(model, input) {
   }
 }
 
+// Align with PTHREAD_POOL_SIZE setting
+// https://github.com/tensorflow/tfjs/blob/master/tfjs-backend-wasm/src/cc/BUILD#L69
+const tfjsTfliteMaxNumThreads = 8;
+// https://github.com/jinjingforever/tflite-support/blob/master/tensorflow_lite_support/web/tflite_model_runner/cc/BUILD#L45
+const tfliteSupportMaxNumThreads = 4;
+
 const benchmarks = {
   'mobilenet_v2': {
     type: 'GraphModel',
@@ -101,7 +107,7 @@ const benchmarks = {
           'https://tfhub.dev/tensorflow/lite-model/mobilenet_v2_1.0_224/1/metadata/1';
       let options = {enableProfiling};
       if (numThreads != 'default') {
-        options.numThreads = parseInt(numThreads);
+        options.numThreads = Math.max(tfjsTfliteMaxNumThreads, parseInt(numThreads));
       }
       return tflite.loadTFLiteModel(url, options);
     },
@@ -427,7 +433,7 @@ const benchmarks = {
     loadTflite: async (enableProfiling = false, numThreads = 'default') => {
       let options = {enableProfiling};
       if (numThreads != 'default') {
-        options.numThreads = parseInt(numThreads);
+        options.numThreads = Math.max(tfjsTfliteMaxNumThreads, parseInt(numThreads));
       }
       return tflite.loadTFLiteModel(state.modelUrl, options);
     },
@@ -497,10 +503,11 @@ async function loadTfliteWebNNRunner(url, enableProfiling, numThreads, enableWeb
 
   // webNNDevicePreference: 0 - default, 1 - gpu, 2 - cpu
   let options = {enableWebNNDelegate, webNNDevicePreference, enableProfiling};
+
   if (numThreads != 'default') {
-    options.numThreads = parseInt(numThreads);
+    options.numThreads = Math.min(tfliteSupportMaxNumThreads, parseInt(numThreads));
   } else {
-    options.numThreads = navigator.hardwareConcurrency / 2;
+    options.numThreads = Math.min(tfliteSupportMaxNumThreads, Math.max(1, (navigator.hardwareConcurrency || 1) / 2));
   }
   // Create model runner.
   const modelRunnerResult =
