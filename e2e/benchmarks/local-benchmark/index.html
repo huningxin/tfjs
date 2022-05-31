@@ -313,6 +313,7 @@ limitations under the License.
       await tf.time(() => tf.add(tf.tensor1d([1]), tf.tensor1d([1])).data());
       const sortedFeatures = Object.keys(tf.env().features).sort().map(
         name => `  ${name}: ${tf.env().features[name]}`);
+      sortedFeatures.push(`  HAS_WEBNN: ${hasWebNN()}`);
       envDiv.innerHTML += `<br/>{<br>${sortedFeatures.join('<br>')}<br>}`;
     }
 
@@ -989,7 +990,7 @@ limitations under the License.
         } else {
           showMsg(null);
         }
-        if (isTfliteWebNN() && !isWebNNSupported()) {
+        if (isTfliteWebNN() && !hasWebNN()) {
           showMsg(`WebNN delegate is not supported on this browser.`);
           await new Promise(resolve => setTimeout(resolve, 1000));
         }
@@ -1041,8 +1042,8 @@ limitations under the License.
       return state.backend === 'tflite';
     }
 
-    function isWebNNSupported() {
-      return navigator.ml;
+    function hasWebNN() {
+      return typeof MLGraphBuilder !== 'undefined';
     }
     function isTfliteWebNN() {
       return state.backend === 'tflite_webnn';
@@ -1066,7 +1067,7 @@ limitations under the License.
       const numThreads = state.flags['NUM_THREADS'];
       const enableWebNNDelegate = state.flags['ENABLE_WEBNN_DELEGATE'];
       const webnnDevicePreference =state.flags['WEBNN_DEVICE_PREFERENCE'];
-      const webnnDevice = {'default': 0, 'gpu': 1, 'cpu': 2};
+      const webnnDevice = {'gpu': 1, 'cpu': 2};
       tfliteWebNNModel = await benchmark.loadTfliteWebNN(enableProfiling, numThreads,
           enableWebNNDelegate, webnnDevice[webnnDevicePreference]);
     }

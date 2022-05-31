@@ -39,7 +39,7 @@ const BACKEND_FLAGS_MAP = {
   ],
 };
 
-if (isWebNNSupported()) {
+if (hasWebNN()) {
   BACKEND_FLAGS_MAP['tflite_webnn'].push('ENABLE_WEBNN_DELEGATE');
   BACKEND_FLAGS_MAP['tflite_webnn'].push('WEBNN_DEVICE_PREFERENCE');
 }
@@ -231,7 +231,7 @@ async function initDefaultValueMap() {
 function getTunableRange(flag) {
   const defaultValue = TUNABLE_FLAG_DEFAULT_VALUE_MAP[flag];
   if (flag === 'WEBNN_DEVICE_PREFERENCE') {
-    return ['default', 'gpu', 'cpu'];
+    return ['cpu', 'gpu'];
   } else if (flag === 'WEBGL_FORCE_F16_TEXTURES' ||
       flag === 'WEBGL_PACK_DEPTHWISECONV' || 'KEEP_INTERMEDIATE_TENSORS') {
     return [false, true];
