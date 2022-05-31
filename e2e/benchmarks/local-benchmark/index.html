@@ -989,6 +989,11 @@ limitations under the License.
         } else {
           showMsg(null);
         }
+        if (isTfliteWebNN() && !isWebNNSupported()) {
+          showMsg(`WebNN delegate is not supported on this browser.`);
+          await new Promise(resolve => setTimeout(resolve, 1000));
+        }
+
         if (isTflite() || isTfliteWebNN()) {
           // Remove the "Test correctness" button which doesn't apply to tfjs-tflite.
           if (correctnessButton) {
@@ -1036,6 +1041,9 @@ limitations under the License.
       return state.backend === 'tflite';
     }
 
+    function isWebNNSupported() {
+      return navigator.ml;
+    }
     function isTfliteWebNN() {
       return state.backend === 'tflite_webnn';
     }
@@ -1055,10 +1063,12 @@ limitations under the License.
       //   tfliteWebNNModel.cleanUp();
       // }
       const benchmark = benchmarks[state.benchmark];
+      const numThreads = state.flags['NUM_THREADS'];
       const enableWebNNDelegate = state.flags['ENABLE_WEBNN_DELEGATE'];
       const webnnDevicePreference =state.flags['WEBNN_DEVICE_PREFERENCE'];
       const webnnDevice = {'default': 0, 'gpu': 1, 'cpu': 2};
-      tfliteWebNNModel = await benchmark.loadTfliteWebNN(enableWebNNDelegate, webnnDevice[webnnDevicePreference], enableProfiling);
+      tfliteWebNNModel = await benchmark.loadTfliteWebNN(enableProfiling, numThreads,
+          enableWebNNDelegate, webnnDevice[webnnDevicePreference]);
     }
 
     function updateModelsDropdown(newValues) {

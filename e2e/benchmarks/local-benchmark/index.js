@@ -35,10 +35,15 @@ const BACKEND_FLAGS_MAP = {
     'NUM_THREADS',
   ],
   tflite_webnn: [
-    'ENABLE_WEBNN_DELEGATE',
-    'WEBNN_DEVICE_PREFERENCE',
+    'NUM_THREADS',
   ],
 };
+
+if (isWebNNSupported()) {
+  BACKEND_FLAGS_MAP['tflite_webnn'].push('ENABLE_WEBNN_DELEGATE');
+  BACKEND_FLAGS_MAP['tflite_webnn'].push('WEBNN_DEVICE_PREFERENCE');
+}
+
 if (tf.engine().backendNames().includes('webgpu')) {
   BACKEND_FLAGS_MAP['webgpu'] =
       ['WEBGPU_DEFERRED_SUBMIT_BATCH_SIZE', 'KEEP_INTERMEDIATE_TENSORS'];

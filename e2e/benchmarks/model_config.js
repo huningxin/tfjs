@@ -105,12 +105,14 @@ const benchmarks = {
       }
       return tflite.loadTFLiteModel(url, options);
     },
-    loadTfliteWebNN: async (enableWebNNDelegate=false, webNNDevicePreference=0, enableProfiling = false) => {
+    loadTfliteWebNN: async (enableProfiling = false, numThreads = -1,
+        enableWebNNDelegate = false, webNNDevicePreference = 0) => {
       // tflite_webnn doesn't support load model from url
       // const url =
       //     'https://tfhub.dev/tensorflow/lite-model/mobilenet_v2_1.0_224/1/metadata/1';
       const url = '../model/mobilenet_v2_1.0_224_1_metadata_1.tflite';
-      return loadTfliteWebNNRunner(url, enableWebNNDelegate, webNNDevicePreference, enableProfiling);
+      return loadTfliteWebNNRunner(url, enableProfiling, numThreads,
+          enableWebNNDelegate, webNNDevicePreference);
     },
     predictFunc: () => {
       const input = tf.randomNormal([1, 224, 224, 3]);
@@ -479,7 +481,7 @@ function convertCppVectorToArray(vector) {
   }
 }
 
-async function loadTfliteWebNNRunner(url, enableWebNNDelegate, webNNDevicePreference, enableProfiling) {
+async function loadTfliteWebNNRunner(url, enableProfiling, numThreads, enableWebNNDelegate, webNNDevicePreference) {
   // Load WASM module and model.
   const [module, modelArrayBuffer] = await Promise.all([
     tflite_model_runner_ModuleFactory(),
@@ -489,16 +491,14 @@ async function loadTfliteWebNNRunner(url, enableWebNNDelegate, webNNDevicePrefer
   const offset = module._malloc(modelBytes.length);
   module.HEAPU8.set(modelBytes, offset);
 
+  // webNNDevicePreference: 0 - default, 1 - gpu, 2 - cpu
+  let options = {enableWebNNDelegate, webNNDevicePreference, enableProfiling};
+  if (numThreads != -1) {
+    options.numThreads = numThreads;
+  }
   // Create model runner.
   const modelRunnerResult =
-  module.TFLiteWebModelRunner.CreateFromBufferAndOptions(
-    offset, modelBytes.length, {
-      numThreads: Math.min(
-        4, Math.max(1, (navigator.hardwareConcurrency || 1) / 2)),
-      enableWebNNDelegate: enableWebNNDelegate,
-      webNNDevicePreference: webNNDevicePreference, // 0 - default, 1 - gpu, 2 - cpu
-      enableProfiling: enableProfiling,
-    });
+      module.TFLiteWebModelRunner.CreateFromBufferAndOptions(offset, modelBytes.length, options);
   if (!modelRunnerResult.ok()) {
     throw new Error(
       'Failed to create TFLiteWebModelRunner: ' + modelRunnerResult.errorMessage());
