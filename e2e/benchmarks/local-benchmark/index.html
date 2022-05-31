@@ -991,8 +991,8 @@ limitations under the License.
           showMsg(null);
         }
         if (isTfliteWebNN() && !hasWebNN()) {
-          showMsg(`WebNN delegate is not supported on this browser.`);
-          await new Promise(resolve => setTimeout(resolve, 1000));
+          showMsg(`WebNN is not supported. Please use Chromium build with WebNN support.`);
+          await new Promise(resolve => setTimeout(resolve, 3000));
         }
 
         if (isTflite() || isTfliteWebNN()) {
