@@ -107,8 +107,9 @@ const benchmarks = {
           'https://tfhub.dev/tensorflow/lite-model/mobilenet_v2_1.0_224/1/metadata/1';
       let options = {enableProfiling};
       if (numThreads != 'default') {
-        options.numThreads = Math.max(tfjsTfliteMaxNumThreads, parseInt(numThreads));
+        options.numThreads = Math.min(tfjsTfliteMaxNumThreads, parseInt(numThreads));
       }
+      console.log(`loadTFLiteModel ${url} with numThreads = ${options.numThreads}`);
       return tflite.loadTFLiteModel(url, options);
     },
     loadTfliteWebNN: async (enableProfiling = false, numThreads = 'default',
@@ -509,6 +510,8 @@ async function loadTfliteWebNNRunner(url, enableProfiling, numThreads, enableWeb
   } else {
     options.numThreads = Math.min(tfliteSupportMaxNumThreads, Math.max(1, (navigator.hardwareConcurrency || 1) / 2));
   }
+  console.log(`loadTfliteWebNNRunner ${url} with numThreads = ${options.numThreads}`);
+
   // Create model runner.
   const modelRunnerResult =
       module.TFLiteWebModelRunner.CreateFromBufferAndOptions(offset, modelBytes.length, options);
